@@ -43,7 +43,7 @@ class MyStack extends TerraformStack {
       name: 'oauth2-service',
       template: {
         containers: [{
-          image: 'quay.io/oauth2-proxy/oauth2-proxy:latest'
+          image: 'us-central1-docker.pkg.dev/sturdy-winner/registry/oauth2-proxy:v7.4.0'
         }],
         scaling: {
           minInstanceCount: 0,
