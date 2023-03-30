@@ -24,6 +24,20 @@ class MyStack extends TerraformStack {
       repositoryId: 'registry',
     });
 
+    new google.secretManagerSecret.SecretManagerSecret(this, 'clientID', {
+        secretId: 'client-id',
+        replication: {
+          automatic: true,
+        },
+      });
+  
+      new google.secretManagerSecret.SecretManagerSecret(this, 'clientSecret', {
+        secretId: 'client-secret',
+        replication: {
+          automatic: true,
+        },
+      });
+  
     new google.cloudRunV2Service.CloudRunV2Service(this, 'web-service', {
       location: region,
       name: 'web-service',
