@@ -1,6 +1,7 @@
 import { Construct } from "constructs";
 import { App, GcsBackend, TerraformStack } from "cdktf";
 import * as google from '@cdktf/provider-google';
+import { DataGoogleIamPolicy } from "@cdktf/provider-google/lib/data-google-iam-policy";
 
 const project = 'sturdy-winner';
 const region = 'us-central1';
@@ -18,52 +19,99 @@ class MyStack extends TerraformStack {
       bucket: `backend-${project}`
     });
 
+    const runner = new google.serviceAccount.ServiceAccount(this, 'runner', {
+        accountId: 'runner',
+    });
+
+    new google.projectIamMember.ProjectIamMember(this, 'allowRunnerSecret', {
+        member: `serviceAccount:${runner.email}`,
+        project,
+        role: 'roles/secretmanager.secretAccessor',
+    });
+
     new google.artifactRegistryRepository.ArtifactRegistryRepository(this, 'registry', {
       format: 'docker',
       location: region,
       repositoryId: 'registry',
     });
 
-    new google.secretManagerSecret.SecretManagerSecret(this, 'clientID', {
+    const cookieSecret = new google.secretManagerSecret.SecretManagerSecret(this, 'cookieSecret', {
+        secretId: 'cookie-secret',
+        replication: {
+          automatic: true,
+        },
+    });
+
+    const clientID = new google.secretManagerSecret.SecretManagerSecret(this, 'clientID', {
         secretId: 'client-id',
         replication: {
           automatic: true,
         },
       });
   
-      new google.secretManagerSecret.SecretManagerSecret(this, 'clientSecret', {
+    const clientSecret = new google.secretManagerSecret.SecretManagerSecret(this, 'clientSecret', {
         secretId: 'client-secret',
         replication: {
           automatic: true,
         },
       });
   
-    new google.cloudRunV2Service.CloudRunV2Service(this, 'web-service', {
+    const webService = new google.cloudRunV2Service.CloudRunV2Service(this, 'web-service', {
       location: region,
       name: 'web-service',
       template: {
         containers: [{
-          image: 'us-central1-docker.pkg.dev/sturdy-winner/registry/web:latest'
+          env: [
+            {
+                name: 'COOKIE_SECRET',
+                valueSource: {
+                    secretKeyRef: {
+                        secret: cookieSecret.secretId,
+                        version: '1',
+                    },
+                },
+            },
+            {
+            name: 'CLIENT_ID',
+            valueSource: {
+                secretKeyRef: {
+                    secret: clientID.secretId,
+                    version: '1',
+                },
+            },
+          },
+          {
+            name: 'CLIENT_SECRET',
+            valueSource: {
+                secretKeyRef: {
+                    secret: clientSecret.secretId,
+                    version: '1',
+                },
+            },
+          },
+          ],
+          image: 'us-central1-docker.pkg.dev/sturdy-winner/registry/web:latest'          
         }],
         scaling: {
           minInstanceCount: 0,
           maxInstanceCount: 1,
         },
+        serviceAccount: runner.email,
       },
     });
 
-    new google.cloudRunV2Service.CloudRunV2Service(this, 'oauth2-service', {
-      location: region,
-      name: 'oauth2-service',
-      template: {
-        containers: [{
-          image: 'us-central1-docker.pkg.dev/sturdy-winner/registry/oauth2-proxy:v7.4.0'
+    const publicRun = new DataGoogleIamPolicy(this, 'publicRun', {
+        binding: [{
+            role: 'roles/run.invoker',
+            members: ['allUsers'],
         }],
-        scaling: {
-          minInstanceCount: 0,
-          maxInstanceCount: 1,
-        },
-      },
+    });
+
+    new google.cloudRunServiceIamPolicy.CloudRunServiceIamPolicy(this, 'publicPolicy', {
+        location: region,
+        policyData: publicRun.policyData,
+        project,
+        service: webService.name,
     });
 
   }

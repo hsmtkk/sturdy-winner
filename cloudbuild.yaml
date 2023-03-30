@@ -4,3 +4,11 @@ steps:
   - --cache=true
   - --cache-ttl=168h
   - --destination=us-central1-docker.pkg.dev/sturdy-winner/registry/web:latest
+- name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+  entrypoint: gcloud
+  args:
+  - run
+  - deploy
+  - web-service
+  - --image=us-central1-docker.pkg.dev/sturdy-winner/registry/web:latest
+  - --region=us-central1
